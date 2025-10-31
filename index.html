@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Radiation Hunt</title>
+<style>
+body{margin:0;padding:0;background:#000;color:#0ff;font-family:monospace;overflow:hidden;}
+canvas#bgCanvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:-1;}
+#statusBar{padding:10px;font-size:20px;text-align:center;text-shadow:0 0 10px #0ff;}
+#console{height:300px;width:95%;margin:10px auto;background:rgba(0,0,20,0.8);border:2px solid #0ff;overflow-y:auto;padding:10px;border-radius:8px;}
+.console-line{opacity:0;animation:fadeInUp 0.5s forwards;margin:2px 0;}
+@keyframes fadeInUp{to{opacity:1;transform:translateY(0);}from{opacity:0;transform:translateY(10px);}}
+#input{width:60%;margin:10px auto;padding:8px;border-radius:5px;background:#000;border:2px solid #0ff;color:#0ff;display:inline-block;}
+button{margin:5px;padding:8px 12px;border-radius:5px;background:#000;border:2px solid #0ff;color:#0ff;cursor:pointer;}
+button:hover{background:#011111;box-shadow:0 0 10px #0ff;}
+#shopPanel{display:none;background:rgba(0,0,20,0.95);border:2px solid #0ff;border-radius:8px;padding:10px;margin:10px auto;width:90%;max-width:600px;}
+.category{cursor:pointer;padding:5px;margin:3px;display:inline-block;border:1px solid #0ff;border-radius:5px;}
+.category:hover{background:#0ff1;}
+.item{padding:5px;margin:3px;border:1px solid #0ff;border-radius:5px;cursor:pointer;display:block;}
+.item:hover{background:#0ff1;}
+.item.bought{animation:popBuy 0.8s forwards;}
+@keyframes popBuy{0%{transform:scale(1) rotate(0deg);opacity:1;}50%{transform:scale(1.5) rotate(15deg);opacity:1;filter:brightness(2);}100%{transform:scale(0) rotate(30deg);opacity:0;}}
+#inventory{padding:10px;width:95%;margin:10px auto;background:rgba(0,0,20,0.8);border:2px solid #0ff;border-radius:8px;}
+</style>
+</head>
+<body>
+<canvas id="bgCanvas"></canvas>
+<div id="statusBar">💠 Body: <span id="pointsDisplay">0</span></div>
+<div id="console"></div>
+<div style="text-align:center;">
+<input type="text" id="input" placeholder="Zadej kód...">
+<button id="sendButton">➡️ Odeslat</button>
+<button id="shopButton">🛒 Otevřít shop</button>
+</div>
+
+<div id="shopPanel">
+<h3>🛍️ Shop</h3>
+<button onclick="closeShop()">❌ Zavřít shop</button>
+<div id="categories"></div>
+<div id="itemsList"></div>
+<h4>🧰 Inventář</h4>
+<div id="inventory"></div>
+</div>
+
+<script>
+// ------------------- PLAYER DATA -------------------
+let player = JSON.parse(localStorage.getItem("playerData")) || {points:0,inventory:[],locked:false};
+const pointsDisplay=document.getElementById("pointsDisplay");
+function updatePoints(){pointsDisplay.textContent=player.points;}
+function saveData(){localStorage.setItem("playerData",JSON.stringify(player));}
+
+// ------------------- LOG -------------------
+function log(text){
+  const c=document.getElementById("console");
+  const line=document.createElement("div");
+  line.className="console-line";
+  line.textContent=text;
+  c.appendChild(line);
+  c.scrollTop=c.scrollHeight;
+}
+
+let codes = [
+  {code:"ZELDA92", points:12},{code:"NEONX1", points:15},{code:"GALAXY7", points:10},{code:"ASTRO99", points:18},{code:"QUANTUM3", points:20},
+  {code:"ORBIT5", points:14},{code:"PLASMA11", points:17},{code:"COSMOS42", points:19},{code:"NOVA88", points:22},{code:"METEOR66", points:16},
+  {code:"SOLAR21", points:13},{code:"LUNAR55", points:15},{code:"STAR9", points:18},{code:"COMET34", points:20},{code:"ASTEROID1", points:12},
+  {code:"BLACKHOLE7", points:17},{code:"SUPERNOVA5", points:19},{code:"NEBULA2", points:14},{code:"SATURN3", points:16},{code:"JUPITER8", points:20},
+  {code:"MARS42", points:12},{code:"VENUS77", points:15},{code:"EARTH99", points:18},{code:"MERCURY11", points:13},{code:"URANUS22", points:16},
+  {code:"PLUTO5", points:19},{code:"COSMIC1", points:14},{code:"ORION3", points:17},{code:"LYRA7", points:20},{code:"ANDROMEDA8", points:12},
+  {code:"PEGASUS6", points:15},{code:"CENTAUR9", points:18},{code:"PHOENIX2", points:16},{code:"DRACO4", points:14},{code:"AQUILA5", points:19},
+  {code:"CYGNUS8", points:13},{code:"TITAN9", points:16},{code:"NEPTUNE7", points:20},{code:"SATELLITE3", points:12},{code:"ROCKET6", points:15},
+  {code:"SPACESHIP1", points:18},{code:"ALIENX9", points:17},{code:"ASTROBOT5", points:14},{code:"BLACKSTAR3", points:19},{code:"QUASAR4", points:12},
+  {code:"PULSAR8", points:16},{code:"SUPERMASSIVE7", points:20},{code:"WORMHOLE6", points:13},{code:"COSMICRAY2", points:15},{code:"SOLARFLARE3", points:18},
+  {code:"LUNARMODULE1", points:12},{code:"INTERSTELLAR9", points:14},{code:"STARSHIP7", points:16},{code:"GALACTIC5", points:19},{code:"ASTROPOD6", points:20},
+  {code:"SPACETIME2", points:13},{code:"COMETTAIL4", points:15},{code:"ASTROCORE8", points:18},{code:"NEBULASTAR5", points:12},{code:"QUANTUMFLUX3", points:16},
+  {code:"PHOTON6", points:14},{code:"NEUTRINO1", points:17},{code:"GRAVITY7", points:19},{code:"ANTIMATTER2", points:20},{code:"DARKMATTER9", points:13},
+  {code:"ORBITAL3", points:15},{code:"PLANETX5", points:18},{code:"COSMICDUST6", points:12},{code:"ASTEROIDBELT8", points:16},{code:"METEORSHOWER4", points:20},
+  {code:"SOLARSYSTEM7", points:13},{code:"LUNARCRATER2", points:15},{code:"COMETSTREAK3", points:18},{code:"GALACTICCORE5", points:19},{code:"NEBULAFIELD6", points:12},
+  {code:"STARCLUSTER8", points:16},{code:"BLACKSTAR9", points:20},{code:"PULSARNOVA7", points:13},{code:"QUASARLIGHT3", points:15},{code:"ASTROPHYSICS2", points:18},
+  {code:"GRAVITYWAVE4", points:12},{code:"COSMOSX6", points:16},{code:"NEBULAFLARE1", points:19},{code:"SUPERNOVAX5", points:20},{code:"BLACKHOLEX2", points:13},
+  {code:"ASTROMATRIX8", points:15},{code:"COSMICSTORM9", points:18},{code:"SPACETIME2", points:12},{code:"ORBITALPATH3", points:16},{code:"hacker", points:60},
+  {code:"PLANETARYX5", points:13},{code:"LUNARMISSION6", points:15},{code:"STARLIGHT7", points:18},{code:"ASTROPULSE8", points:12},{code:"COSMICSIGNAL9", points:16},
+  {code:"NEBULAPATH1", points:20},{code:"METEORIMPACT2", points:13},{code:"SOLARWIND3", points:15},{code:"COMETSHARD4", points:18},{code:"ASTEROIDX5", points:12},
+  {code:"SPACESHIPX6", points:16},{code:"ALIENCRAFT7", points:20},{code:"ASTRODRONE8", points:13},{code:"BLACKHOLEX9", points:15},{code:"QUASARX1", points:18}
+];
+
+
+// ------------------- SHOP ITEMS -------------------
+// ------------------- SHOP ITEMS -------------------
+const shopItems = {
+  boosty: [
+    {name:"Rychlostní Boost", cost:10, stock:Math.floor(Math.random()*4), ability:"Zvyšuje rychlost o 20%"},
+    {name:"Síla Laseru", cost:12, stock:Math.floor(Math.random()*4), ability:"Způsobí extra damage"},
+    {name:"Magnetický Štít", cost:14, stock:Math.floor(Math.random()*4), ability:"Ochrana proti útokům"},
+    {name:"Super Skok", cost:16, stock:Math.floor(Math.random()*4), ability:"Skok o 50% vyšší"},
+    {name:"Extra Body", cost:18, stock:Math.floor(Math.random()*4), ability:"Přidává extra body za kódy"},
+    {name:"Časový Zrychlovač", cost:20, stock:Math.floor(Math.random()*4), ability:"Zrychluje čas na 10s"},
+    {name:"Nesmrtelnost 5s", cost:22, stock:Math.floor(Math.random()*4), ability:"Nesmrtelnost po 5 sekund"},
+    {name:"Raketový Pohon", cost:24, stock:Math.floor(Math.random()*4), ability:"Rychlý pohyb v mapě"},
+    {name:"Energie Plazmy", cost:26, stock:Math.floor(Math.random()*4), ability:"Zvyšuje poškození z plazmy"},
+    {name:"Gravity Lift", cost:28, stock:Math.floor(Math.random()*4), ability:"Ovládání gravitace"}
+  ],
+  itemy: [
+    {name:"Plazmová Puška", cost:8, stock:Math.floor(Math.random()*4), ability:"Střílí plazmové střely"},
+    {name:"Laserový Meč", cost:9, stock:Math.floor(Math.random()*4), ability:"Melee útok s laserem"},
+    {name:"Nano Brnění", cost:10, stock:Math.floor(Math.random()*4), ability:"Snižuje přijaté poškození"},
+    {name:"Teleportátor", cost:11, stock:Math.floor(Math.random()*4), ability:"Teleport na krátkou vzdálenost"},
+    {name:"Energetický Modul", cost:12, stock:Math.floor(Math.random()*4), ability:"Regenerace energie"},
+    {name:"Výbušný Granát", cost:13, stock:Math.floor(Math.random()*4), ability:"Explozivní poškození"},
+    {name:"Repair Kit", cost:14, stock:Math.floor(Math.random()*4), ability:"Léčí hráče"},
+    {name:"Plasma Dron", cost:15, stock:Math.floor(Math.random()*4), ability:"Útočí na nepřátele automaticky"},
+    {name:"Stealth Modul", cost:16, stock:Math.floor(Math.random()*4), ability:"Neviditelnost na 5s"},
+    {name:"Antigravity Boots", cost:17, stock:Math.floor(Math.random()*4), ability:"Chůze po vzduchu"}
+  ],
+  achievements: [
+    {name:"Mistr Kódů", cost:20, stock:Math.floor(Math.random()*4), ability:"Odemyká speciální titul"},
+    {name:"Galactic Hunter", cost:21, stock:Math.floor(Math.random()*4), ability:"Extra body za každý kód"},
+    {name:"Asteroid Slayer", cost:22, stock:Math.floor(Math.random()*4), ability:"Bonus damage na asteroidy"},
+    {name:"Supernova Survivor", cost:23, stock:Math.floor(Math.random()*4), ability:"Odolnost proti výbuchům"},
+    {name:"Cosmic Explorer", cost:24, stock:Math.floor(Math.random()*4), ability:"Získání unikátních lokací"},
+    {name:"Star Collector", cost:25, stock:Math.floor(Math.random()*4), ability:"Sbírání hvězdných bodů"},
+    {name:"Void Walker", cost:26, stock:Math.floor(Math.random()*4), ability:"Rychlý pohyb vesmírem"},
+    {name:"Quantum Master", cost:27, stock:Math.floor(Math.random()*4), ability:"Zvyšuje body za kódy"},
+    {name:"Nebula Nomad", cost:28, stock:Math.floor(Math.random()*4), ability:"Zvláštní schopnosti v mlhovinách"},
+    {name:"Pulsar Conqueror", cost:29, stock:Math.floor(Math.random()*4), ability:"Odemyká speciální pulsar efekty"}
+  ]
+};
+
+
+// ------------------- SHOP FUNCTIONS -------------------
+const categoriesDiv = document.getElementById("categories");
+const itemsListDiv = document.getElementById("itemsList");
+const inventoryDiv = document.getElementById("inventory");
+
+function showShop(){
+  document.getElementById("shopPanel").style.display = "block";
+  categoriesDiv.innerHTML=""; itemsListDiv.innerHTML=""; updateInventory();
+  for(let cat in shopItems){
+    let b=document.createElement("div"); b.className="category"; b.textContent=cat.toUpperCase();
+    b.onclick = ()=>showItems(cat);
+    categoriesDiv.appendChild(b);
+  }
+}
+function closeShop(){document.getElementById("shopPanel").style.display="none";}
+function showItems(cat){
+  itemsListDiv.innerHTML="";
+  shopItems[cat].forEach(i=>{
+    let it=document.createElement("div"); it.className="item";
+    it.textContent = `${i.name} - ${i.cost} bodů (Stock: ${i.stock})`;
+    if(i.stock===0){it.style.opacity="0.3"; it.style.cursor="not-allowed";}
+    it.onclick = ()=>{
+      if(i.stock>0){buyItem(cat,i,it);} else {log(`❌ ${i.name} není skladem!`);}
+    };
+    itemsListDiv.appendChild(it);
+  });
+}
+function buyItem(cat,item,el){
+  if(player.points>=item.cost && item.stock>0){
+    player.points -= item.cost; updatePoints();
+    item.stock--; player.inventory.push(item.name); saveData();
+    updateInventory();
+    el.classList.add("bought"); setTimeout(()=>el.classList.remove("bought"),800);
+    log(`🛒 Koupil jsi: ${item.name} → ${item.ability} (Stock: ${item.stock})`);
+    showItems(cat);
+  } else log("❌ Nemáš dost bodů nebo item není skladem.");
+}
+function updateInventory(){
+  inventoryDiv.innerHTML="";
+  player.inventory.forEach(itemName=>{
+    let item = null;
+    for(let cat in shopItems){item = shopItems[cat].find(i=>i.name===itemName); if(item) break;}
+    if(item){let d=document.createElement("div"); d.textContent=`${item.name} → ${item.ability}`; inventoryDiv.appendChild(d);}
+  });
+}
+
+// ------------------- CODE PROCESSING -------------------
+function processCode(code){
+  if(player.locked){log("❌ Terminál je zamčen!"); return;}
+  let c=codes.find(x=>x.code.toUpperCase()===code.toUpperCase());
+  if(c){
+    if(c.code==="RESET"){localStorage.removeItem("playerData");player={points:0,inventory:[],locked:false};updatePoints();updateInventory();log("♻️ Hráč resetován!");return;}
+    player.points+=c.points; saveData(); updatePoints();
+    log(`User: Redeemnul jsi kód: "${c.code}" a získal jsi: "${c.points}" bodů!  🎉  !`);
+  } else log("❌ Neplatný kód.");
+}
+
+// ------------------- EVENTS -------------------
+document.getElementById("sendButton").onclick = ()=>{let val=document.getElementById("input").value.trim();if(val==="")return; if(val.toLowerCase()==="admin"){log("Admin panel otevřen!");return;} processCode(val); document.getElementById("input").value="";}
+document.getElementById("input").addEventListener("keydown",e=>{if(e.key==="Enter") document.getElementById("sendButton").click();});
+document.getElementById("shopButton").onclick=showShop;
+
+// ------------------- INIT -------------------
+updatePoints(); updateInventory();
+</script>
+</body>
+</html>
