@@ -229,4 +229,31 @@
       if (c) {
         if (c.code === "RESET") {
           localStorage.removeItem("playerData");
-          player = { points: 0,
+          player = { points: 0, inventory: [], locked: false };
+          saveData();
+          log("🔄 Data byla resetována!");
+        } else {
+          player.points += c.points;
+          updatePoints();
+          log(`🎉 Získal jsi ${c.points} bodů za kód: ${c.code}`);
+        }
+      } else {
+        log("❌ Neplatný kód!");
+      }
+    }
+
+    // ------------------- EVENT LISTENERS -------------------
+    document.getElementById("sendButton").addEventListener("click", () => {
+      const code = document.getElementById("input").value;
+      processCode(code);
+      document.getElementById("input").value = "";
+    });
+
+    document.getElementById("shopButton").addEventListener("click", showShop);
+
+    // ------------------- INITIALIZATION -------------------
+    updatePoints();
+    log("💠 Vítej v Radiation-Hunt! Zadej kód pro získání bodů.");
+  </script>
+</body>
+</html>
